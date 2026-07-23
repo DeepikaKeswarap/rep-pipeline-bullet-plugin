@@ -5,6 +5,7 @@ import {
   useElementColumns,
   useElementData,
   useLoadingState,
+  usePluginStyle,
 } from '@sigmacomputing/plugin';
 import BulletChart from './BulletChart';
 
@@ -141,11 +142,42 @@ const CONFIG = [
     source: 'format',
     defaultValue: true,
   },
+  {
+    name: 'valueFormat',
+    type: 'dropdown',
+    label: 'Bar value format',
+    source: 'format',
+    values: ['Compact (1.2K)', 'Full number (1,234)', 'Percent (0%)', 'Currency ($)'],
+    defaultValue: 'Compact (1.2K)',
+  },
+  {
+    name: 'pointFormat',
+    type: 'dropdown',
+    label: 'Point value format',
+    source: 'format',
+    values: ['Compact (1.2K)', 'Full number (1,234)', 'Percent (0%)', 'Currency ($)'],
+    defaultValue: 'Percent (0%)',
+  },
+  {
+    name: 'pointSecondaryAxis',
+    type: 'toggle',
+    label: 'Point on its own axis',
+    source: 'format',
+    defaultValue: true,
+  },
   { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color', source: 'format' },
   { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color', source: 'format' },
   { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color', source: 'format' },
   { name: 'bar2bColor', type: 'color', label: 'Bar 2 – Segment B color', source: 'format' },
   { name: 'pointColor', type: 'color', label: 'Point marker color', source: 'format' },
+  {
+    name: 'showBorder',
+    type: 'toggle',
+    label: 'Tile border',
+    source: 'format',
+    defaultValue: true,
+  },
+  { name: 'borderColor', type: 'color', label: 'Border color', source: 'format' },
 ];
 
 const DEFAULT_COLORS = {
@@ -175,6 +207,12 @@ export default function App() {
   const sortDir = useConfig('sortDir');
   const showDataLabels = useConfig('showDataLabels');
   const enableFilter = useConfig('enableFilter');
+  const valueFormat = useConfig('valueFormat');
+  const pointFormat = useConfig('pointFormat');
+  const pointSecondaryAxis = useConfig('pointSecondaryAxis');
+  const showBorder = useConfig('showBorder');
+  const borderColor = useConfig('borderColor');
+  const pluginStyle = usePluginStyle();
 
   const bar1aColor = useConfig('bar1aColor');
   const bar1bColor = useConfig('bar1bColor');
@@ -305,6 +343,12 @@ export default function App() {
       legendItems={legendItems}
       enableFilter={enableFilter !== false}
       filterFields={filterFields}
+      valueFormat={valueFormat || 'Compact (1.2K)'}
+      pointFormat={pointFormat || 'Percent (0%)'}
+      pointSecondaryAxis={pointSecondaryAxis !== false}
+      showBorder={showBorder !== false}
+      borderColor={borderColor || '#D0D0D0'}
+      backgroundColor={pluginStyle?.backgroundColor}
     />
   );
 }
