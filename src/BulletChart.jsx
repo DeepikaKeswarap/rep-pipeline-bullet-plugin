@@ -31,6 +31,13 @@ function formatNumber(n) {
   return new Intl.NumberFormat('en-US').format(Math.round(n));
 }
 
+/** Compact number for placeholders (keeps up to 2 decimals for small values). */
+function formatStat(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '';
+  if (Math.abs(n) < 10 && !Number.isInteger(n)) return String(Math.round(n * 100) / 100);
+  return new Intl.NumberFormat('en-US').format(Math.round(n));
+}
+
 /** Picks black or white label text for readability over a given fill color. */
 function readableText(hex) {
   if (!hex || typeof hex !== 'string') return '#333';
@@ -73,6 +80,23 @@ const linkBtnStyle = {
   padding: 0,
 };
 
+const numInputStyle = {
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '4px 6px',
+  border: '1px solid #ddd',
+  borderRadius: 4,
+  fontSize: 12,
+};
+
+// Numeric filter operators, mirroring Sigma's numeric condition styles.
+const NUMERIC_OPS = [
+  { value: 'between', label: 'Between' },
+  { value: 'gte', label: '\u2265  Greater than or equal' },
+  { value: 'lte', label: '\u2264  Less than or equal' },
+  { value: 'eq', label: '=  Equals' },
+];
+
 function FunnelIcon({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
@@ -81,12 +105,45 @@ function FunnelIcon({ size = 13 }) {
   );
 }
 
-/** Top-right category filter. Purely client-side: it narrows which rows this
- * chart draws from the data Sigma already provided. It does NOT filter the
- * underlying dataset or other workbook elements. State is kept as a set of
- * *hidden* categories so newly-arriving categories default to visible. */
-function CategoryFilter({ categories, hidden, setHidden }) {
+/** Returns true if a row passes the current filter set (category exclusions
+ * AND every active numeric min/max range). Shared by the chart and the panel. */
+function rowPasses(row, fields, hidden, ranges) {
+  if (hidden.has(String(row.category ?? ''))) return false;
+  for (const f of fields) {
+    if (f.type !== 'numeric') continue;
+    const rng = ranges[f.key];
+    if (!rng) continue;
+    const op = rng.op || 'between';
+    const hasA = rng.a !== '' && rng.a !== null && rng.a !== undefined;
+    const hasB = rng.b !== '' && rng.b !== null && rng.b !== undefined;
+    if (op === 'between' ? !hasA && !hasB : !hasA) continue;
+    const v = row[f.key];
+    if (v === null || v === undefined || Number.isNaN(v)) return false;
+    const a = Number(rng.a);
+    const b = Number(rng.b);
+    if (op === 'gte') {
+      if (!(v >= a)) return false;
+    } else if (op === 'lte') {
+      if (!(v <= a)) return false;
+    } else if (op === 'eq') {
+      if (Math.abs(v - a) > 1e-9) return false;
+    } else {
+      // between
+      if (hasA && v < a) return false;
+      if (hasB && v > b) return false;
+    }
+  }
+  return true;
+}
+
+/** Top-right filter control that works across any mapped field. Text fields
+ * (the category) filter via a checkbox list; numeric fields filter via a
+ * min/max range. Purely client-side: it narrows which rows THIS chart draws
+ * from the data Sigma already provided — it does not filter the underlying
+ * dataset or other workbook elements. */
+function DataFilter({ fields, categories, stats, hidden, setHidden, ranges, setRanges }) {
   const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(fields[0]?.key || 'category');
   const [query, setQuery] = useState('');
   const rootRef = useRef(null);
 
@@ -99,26 +156,50 @@ function CategoryFilter({ categories, hidden, setHidden }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const q = query.trim().toLowerCase();
-  const shown = q ? categories.filter((c) => c.toLowerCase().includes(q)) : categories;
-  const visibleCount = categories.length - hidden.size;
+  // Keep the selected field valid if the mapped columns change.
+  useEffect(() => {
+    if (!fields.some((f) => f.key === selected)) setSelected(fields[0]?.key || 'category');
+  }, [fields, selected]);
 
-  const toggle = (c) =>
+  const numericActive = (key) => {
+    const r = ranges[key];
+    if (!r) return false;
+    return (r.op || 'between') === 'between' ? r.a !== '' || r.b !== '' : r.a !== '' && r.a != null;
+  };
+  const activeCount =
+    (hidden.size ? 1 : 0) + fields.filter((f) => f.type === 'numeric' && numericActive(f.key)).length;
+
+  const selField = fields.find((f) => f.key === selected) || fields[0];
+
+  const q = query.trim().toLowerCase();
+  const shownCats = q ? categories.filter((c) => c.toLowerCase().includes(q)) : categories;
+
+  const toggleCat = (c) =>
     setHidden((prev) => {
       const next = new Set(prev);
       if (next.has(c)) next.delete(c);
       else next.add(c);
       return next;
     });
-  const selectAll = () => setHidden(new Set());
-  const clearAll = () => setHidden(new Set(categories));
+  const patchRange = (key, patch) =>
+    setRanges((prev) => ({ ...prev, [key]: { op: 'between', a: '', b: '', ...prev[key], ...patch } }));
+  const clearRange = (key) =>
+    setRanges((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const resetAll = () => {
+    setHidden(new Set());
+    setRanges({});
+  };
 
   return (
     <div ref={rootRef} style={{ position: 'absolute', top: 2, right: 2, zIndex: 5, fontSize: 12 }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="Filter categories"
+        title="Filter data"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -126,14 +207,14 @@ function CategoryFilter({ categories, hidden, setHidden }) {
           padding: '3px 8px',
           border: '1px solid #d0d0d0',
           borderRadius: 4,
-          background: hidden.size ? '#eef4ff' : '#fff',
+          background: activeCount ? '#eef4ff' : '#fff',
           color: '#333',
           cursor: 'pointer',
           lineHeight: 1.4,
         }}
       >
         <FunnelIcon />
-        <span>{hidden.size ? `Filter (${visibleCount}/${categories.length})` : 'Filter'}</span>
+        <span>{activeCount ? `Filter (${activeCount})` : 'Filter'}</span>
       </button>
 
       {open && (
@@ -142,7 +223,7 @@ function CategoryFilter({ categories, hidden, setHidden }) {
             position: 'absolute',
             top: 28,
             right: 0,
-            width: 220,
+            width: 240,
             background: '#fff',
             border: '1px solid #d0d0d0',
             borderRadius: 6,
@@ -151,38 +232,145 @@ function CategoryFilter({ categories, hidden, setHidden }) {
             zIndex: 6,
           }}
         >
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search…"
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: '4px 6px',
-              marginBottom: 6,
-              border: '1px solid #ddd',
-              borderRadius: 4,
-              fontSize: 12,
+          {/* Field picker */}
+          <label style={{ display: 'block', color: '#666', marginBottom: 3 }}>Field</label>
+          <select
+            value={selected}
+            onChange={(e) => {
+              setSelected(e.target.value);
+              setQuery('');
             }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <button type="button" onClick={selectAll} style={linkBtnStyle}>Select all</button>
-            <button type="button" onClick={clearAll} style={linkBtnStyle}>Clear</button>
-          </div>
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            {shown.length === 0 ? (
-              <div style={{ color: '#999', padding: '4px 2px' }}>No matches</div>
-            ) : (
-              shown.map((c) => (
-                <label
-                  key={c}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', cursor: 'pointer' }}
+            style={{ ...numInputStyle, marginBottom: 8 }}
+          >
+            {fields.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.label}
+                {f.key !== 'category' && numericActive(f.key) ? ' •' : ''}
+                {f.key === 'category' && hidden.size ? ' •' : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* Text field -> checkbox list */}
+          {selField && selField.type === 'text' && (
+            <>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                style={{ ...numInputStyle, marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <button type="button" onClick={() => setHidden(new Set())} style={linkBtnStyle}>
+                  Select all
+                </button>
+                <button type="button" onClick={() => setHidden(new Set(categories))} style={linkBtnStyle}>
+                  Clear
+                </button>
+              </div>
+              <div style={{ maxHeight: 190, overflowY: 'auto' }}>
+                {shownCats.length === 0 ? (
+                  <div style={{ color: '#999', padding: '4px 2px' }}>No matches</div>
+                ) : (
+                  shownCats.map((c) => (
+                    <label
+                      key={c}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', cursor: 'pointer' }}
+                    >
+                      <input type="checkbox" checked={!hidden.has(c)} onChange={() => toggleCat(c)} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Numeric field -> operator + value(s) */}
+          {selField && selField.type === 'numeric' && (() => {
+            const cur = ranges[selField.key] || { op: 'between', a: '', b: '' };
+            const op = cur.op || 'between';
+            const st = stats[selField.key];
+            return (
+              <>
+                <label style={{ display: 'block', color: '#666', marginBottom: 3 }}>Condition</label>
+                <select
+                  value={op}
+                  onChange={(e) => patchRange(selField.key, { op: e.target.value })}
+                  style={{ ...numInputStyle, marginBottom: 8 }}
                 >
-                  <input type="checkbox" checked={!hidden.has(c)} onChange={() => toggle(c)} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c}</span>
-                </label>
-              ))
-            )}
+                  {NUMERIC_OPS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+
+                {op === 'between' ? (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', color: '#666', marginBottom: 3 }}>Min</label>
+                      <input
+                        type="number"
+                        value={cur.a ?? ''}
+                        onChange={(e) => patchRange(selField.key, { a: e.target.value })}
+                        placeholder={st ? formatStat(st.min) : ''}
+                        style={numInputStyle}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', color: '#666', marginBottom: 3 }}>Max</label>
+                      <input
+                        type="number"
+                        value={cur.b ?? ''}
+                        onChange={(e) => patchRange(selField.key, { b: e.target.value })}
+                        placeholder={st ? formatStat(st.max) : ''}
+                        style={numInputStyle}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 6 }}>
+                    <label style={{ display: 'block', color: '#666', marginBottom: 3 }}>Value</label>
+                    <input
+                      type="number"
+                      value={cur.a ?? ''}
+                      onChange={(e) => patchRange(selField.key, { a: e.target.value })}
+                      placeholder={st ? formatStat(op === 'lte' ? st.max : st.min) : ''}
+                      style={numInputStyle}
+                    />
+                  </div>
+                )}
+
+                {st && (
+                  <div style={{ color: '#999', marginBottom: 6 }}>
+                    Data range: {formatStat(st.min)} – {formatStat(st.max)}
+                  </div>
+                )}
+                <button type="button" onClick={() => clearRange(selField.key)} style={linkBtnStyle}>
+                  Clear this field
+                </button>
+              </>
+            );
+          })()}
+
+          {/* Footer */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderTop: '1px solid #eee',
+              marginTop: 8,
+              paddingTop: 6,
+            }}
+          >
+            <span style={{ color: '#999' }}>
+              {activeCount ? `${activeCount} filter${activeCount > 1 ? 's' : ''} active` : 'No filters'}
+            </span>
+            <button type="button" onClick={resetAll} style={linkBtnStyle} disabled={!activeCount}>
+              Reset all
+            </button>
           </div>
         </div>
       )}
@@ -236,11 +424,13 @@ export default function BulletChart({
   legendItems = [],
   legendPosition = 'Bottom',
   enableFilter = true,
+  filterFields = [],
 }) {
   const [containerRef, containerWidth] = useContainerWidth();
 
-  // Client-side category filter state: the set of categories to hide.
+  // Client-side filter state: hidden categories + numeric min/max per field.
   const [hidden, setHidden] = useState(() => new Set());
+  const [ranges, setRanges] = useState({});
 
   const categories = useMemo(() => {
     const seen = [];
@@ -255,9 +445,31 @@ export default function BulletChart({
     return seen;
   }, [rows]);
 
+  // Min/max per numeric field, for the filter panel's placeholders + hint.
+  const stats = useMemo(() => {
+    const out = {};
+    filterFields
+      .filter((f) => f.type === 'numeric')
+      .forEach((f) => {
+        let mn = Infinity;
+        let mx = -Infinity;
+        let has = false;
+        rows.forEach((r) => {
+          const v = r[f.key];
+          if (v !== null && v !== undefined && !Number.isNaN(v)) {
+            has = true;
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+          }
+        });
+        out[f.key] = has ? { min: mn, max: mx } : null;
+      });
+    return out;
+  }, [rows, filterFields]);
+
   const visibleRows = useMemo(
-    () => (hidden.size ? rows.filter((r) => !hidden.has(String(r.category ?? ''))) : rows),
-    [rows, hidden],
+    () => rows.filter((r) => rowPasses(r, filterFields, hidden, ranges)),
+    [rows, filterFields, hidden, ranges],
   );
 
   const maxValue = useMemo(() => {
@@ -284,8 +496,16 @@ export default function BulletChart({
 
   const chartArea = (
     <div ref={containerRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
-      {enableFilter && categories.length > 0 && (
-        <CategoryFilter categories={categories} hidden={hidden} setHidden={setHidden} />
+      {enableFilter && filterFields.length > 0 && (
+        <DataFilter
+          fields={filterFields}
+          categories={categories}
+          stats={stats}
+          hidden={hidden}
+          setHidden={setHidden}
+          ranges={ranges}
+          setRanges={setRanges}
+        />
       )}
 
       <svg width={containerWidth} height={totalHeight}>
@@ -316,13 +536,7 @@ export default function BulletChart({
 
             return (
               <g key={`${r.category}-${i}`}>
-                <text
-                  x={-12}
-                  y={rowY + ROW_HEIGHT / 2 + 4}
-                  fontSize="12.5"
-                  fill="#333"
-                  textAnchor="end"
-                >
+                <text x={-12} y={rowY + ROW_HEIGHT / 2 + 4} fontSize="12.5" fill="#333" textAnchor="end">
                   {r.category}
                 </text>
 
@@ -375,14 +589,7 @@ export default function BulletChart({
                       <title>{`${labels.point}: ${formatNumber(r.point)}`}</title>
                     </circle>
                     {showDataLabels && (
-                      <text
-                        x={x(r.point)}
-                        y={rowY - 6}
-                        fontSize="10"
-                        fill={colors.point}
-                        textAnchor="middle"
-                        style={{ pointerEvents: 'none' }}
-                      >
+                      <text x={x(r.point)} y={rowY - 6} fontSize="10" fill={colors.point} textAnchor="middle" style={{ pointerEvents: 'none' }}>
                         {formatNumber(r.point)}
                       </text>
                     )}
@@ -395,16 +602,8 @@ export default function BulletChart({
       </svg>
 
       {visibleRows.length === 0 && (
-        <div
-          style={{
-            position: 'absolute',
-            top: MARGIN.top,
-            left: MARGIN.left,
-            color: '#999',
-            fontSize: 12,
-          }}
-        >
-          All categories are filtered out.
+        <div style={{ position: 'absolute', top: MARGIN.top, left: MARGIN.left, color: '#999', fontSize: 12 }}>
+          No rows match the current filters.
         </div>
       )}
     </div>

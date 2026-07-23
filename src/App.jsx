@@ -129,7 +129,7 @@ const CONFIG = [
   {
     name: 'enableFilter',
     type: 'toggle',
-    label: 'Enable category filter',
+    label: 'Enable filter',
     source: 'format',
     defaultValue: true,
   },
@@ -260,6 +260,20 @@ export default function App() {
   if (bar2bCol) legendItems.push({ key: 'bar2b', label: labels.bar2b, color: colors.bar2b, shape: 'rect' });
   if (pointCol) legendItems.push({ key: 'point', label: labels.point, color: colors.point, shape: 'circle' });
 
+  // Fields the in-chart filter can operate on: the category (text) plus every
+  // measure that actually has a column mapped (numeric). Labels come from the
+  // Sigma column names, so e.g. a measure mapped to "Pace Attainment %" shows
+  // up as a numeric field with a min/max condition.
+  const filterFields = useMemo(() => {
+    const f = [{ key: 'category', label: labels.category, type: 'text' }];
+    if (bar1aCol) f.push({ key: 'bar1a', label: labels.bar1a, type: 'numeric' });
+    if (bar1bCol) f.push({ key: 'bar1b', label: labels.bar1b, type: 'numeric' });
+    if (bar2aCol) f.push({ key: 'bar2a', label: labels.bar2a, type: 'numeric' });
+    if (bar2bCol) f.push({ key: 'bar2b', label: labels.bar2b, type: 'numeric' });
+    if (pointCol) f.push({ key: 'point', label: labels.point, type: 'numeric' });
+    return f;
+  }, [labels, bar1aCol, bar1bCol, bar2aCol, bar2bCol, pointCol]);
+
   if (!source || !categoryCol) {
     return (
       <div className="empty-state">
@@ -280,6 +294,7 @@ export default function App() {
       legendPosition={legendPosition || 'Bottom'}
       legendItems={legendItems}
       enableFilter={enableFilter !== false}
+      filterFields={filterFields}
     />
   );
 }
