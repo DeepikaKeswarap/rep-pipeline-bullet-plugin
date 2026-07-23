@@ -7,7 +7,7 @@ const GAP = 4;
 
 /** Tracks the rendered width of a container element so the chart can fill
  * whatever space Sigma gives the plugin element, and re-flow if the user
- * resizes it. */
+ * resizes it (or if a left/right legend narrows the plot area). */
 function useContainerWidth() {
   const ref = useRef(null);
   const [width, setWidth] = useState(600);
@@ -64,28 +64,230 @@ function niceTicks(max, targetCount = 6) {
   return ticks;
 }
 
-export default function BulletChart({ rows, title, colors, labels, showDataLabels, showLegend, legendItems = [] }) {
+const linkBtnStyle = {
+  background: 'none',
+  border: 'none',
+  color: '#2b6cb0',
+  cursor: 'pointer',
+  fontSize: 12,
+  padding: 0,
+};
+
+function FunnelIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M1 2.5h14L9.5 9v4.5l-3 1.5V9L1 2.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Top-right category filter. Purely client-side: it narrows which rows this
+ * chart draws from the data Sigma already provided. It does NOT filter the
+ * underlying dataset or other workbook elements. State is kept as a set of
+ * *hidden* categories so newly-arriving categories default to visible. */
+function CategoryFilter({ categories, hidden, setHidden }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const shown = q ? categories.filter((c) => c.toLowerCase().includes(q)) : categories;
+  const visibleCount = categories.length - hidden.size;
+
+  const toggle = (c) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  const selectAll = () => setHidden(new Set());
+  const clearAll = () => setHidden(new Set(categories));
+
+  return (
+    <div ref={rootRef} style={{ position: 'absolute', top: 2, right: 2, zIndex: 5, fontSize: 12 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Filter categories"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: '3px 8px',
+          border: '1px solid #d0d0d0',
+          borderRadius: 4,
+          background: hidden.size ? '#eef4ff' : '#fff',
+          color: '#333',
+          cursor: 'pointer',
+          lineHeight: 1.4,
+        }}
+      >
+        <FunnelIcon />
+        <span>{hidden.size ? `Filter (${visibleCount}/${categories.length})` : 'Filter'}</span>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 28,
+            right: 0,
+            width: 220,
+            background: '#fff',
+            border: '1px solid #d0d0d0',
+            borderRadius: 6,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+            padding: 8,
+            zIndex: 6,
+          }}
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search…"
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '4px 6px',
+              marginBottom: 6,
+              border: '1px solid #ddd',
+              borderRadius: 4,
+              fontSize: 12,
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <button type="button" onClick={selectAll} style={linkBtnStyle}>Select all</button>
+            <button type="button" onClick={clearAll} style={linkBtnStyle}>Clear</button>
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            {shown.length === 0 ? (
+              <div style={{ color: '#999', padding: '4px 2px' }}>No matches</div>
+            ) : (
+              shown.map((c) => (
+                <label
+                  key={c}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', cursor: 'pointer' }}
+                >
+                  <input type="checkbox" checked={!hidden.has(c)} onChange={() => toggle(c)} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Series legend. Lays out horizontally (wrapping) for Top/Bottom, and as a
+ * vertical stack for Left/Right. */
+function Legend({ items, position }) {
+  const vertical = position === 'Left' || position === 'Right';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: vertical ? 'column' : 'row',
+        flexWrap: vertical ? 'nowrap' : 'wrap',
+        gap: vertical ? '6px' : '8px 18px',
+        alignContent: 'flex-start',
+        fontSize: 12,
+        color: '#333',
+        ...(vertical ? { paddingTop: MARGIN.top } : {}),
+      }}
+    >
+      {items.map((it) => (
+        <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              width: 12,
+              height: 12,
+              background: it.color,
+              borderRadius: it.shape === 'circle' ? '50%' : 2,
+              display: 'inline-block',
+              flex: '0 0 auto',
+            }}
+          />
+          <span style={{ whiteSpace: 'nowrap' }}>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function BulletChart({
+  rows,
+  title,
+  colors,
+  labels,
+  showDataLabels,
+  showLegend,
+  legendItems = [],
+  legendPosition = 'Bottom',
+  enableFilter = true,
+}) {
   const [containerRef, containerWidth] = useContainerWidth();
+
+  // Client-side category filter state: the set of categories to hide.
+  const [hidden, setHidden] = useState(() => new Set());
+
+  const categories = useMemo(() => {
+    const seen = [];
+    const set = new Set();
+    rows.forEach((r) => {
+      const c = String(r.category ?? '');
+      if (!set.has(c)) {
+        set.add(c);
+        seen.push(c);
+      }
+    });
+    return seen;
+  }, [rows]);
+
+  const visibleRows = useMemo(
+    () => (hidden.size ? rows.filter((r) => !hidden.has(String(r.category ?? ''))) : rows),
+    [rows, hidden],
+  );
 
   const maxValue = useMemo(() => {
     let m = 0;
-    rows.forEach((r) => {
+    visibleRows.forEach((r) => {
       m = Math.max(m, r.bar1a + r.bar1b, r.bar2a + r.bar2b, r.point || 0);
     });
     return m || 1;
-  }, [rows]);
+  }, [visibleRows]);
 
   const ticks = useMemo(() => niceTicks(maxValue), [maxValue]);
   const scaleMax = ticks[ticks.length - 1] || maxValue;
 
   const chartWidth = Math.max(containerWidth - MARGIN.left - MARGIN.right, 50);
-  const chartHeight = Math.max(rows.length, 1) * ROW_HEIGHT;
+  const chartHeight = Math.max(visibleRows.length, 1) * ROW_HEIGHT;
   const totalHeight = chartHeight + MARGIN.top + MARGIN.bottom;
 
   const x = (v) => (v / scaleMax) * chartWidth;
 
-  return (
-    <div ref={containerRef} style={{ width: '100%' }}>
+  const showLegendNow = showLegend && legendItems.length > 0;
+  const vertical = legendPosition === 'Left' || legendPosition === 'Right';
+  const legendFirst = legendPosition === 'Top' || legendPosition === 'Left';
+  const legendEl = showLegendNow ? <Legend items={legendItems} position={legendPosition} /> : null;
+
+  const chartArea = (
+    <div ref={containerRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
+      {enableFilter && categories.length > 0 && (
+        <CategoryFilter categories={categories} hidden={hidden} setHidden={setHidden} />
+      )}
+
       <svg width={containerWidth} height={totalHeight}>
         {title ? (
           <text x={0} y={20} fontSize="15" fontWeight="600" fill="#333">
@@ -103,7 +305,7 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
             </g>
           ))}
 
-          {rows.map((r, i) => {
+          {visibleRows.map((r, i) => {
             const rowY = i * ROW_HEIGHT;
             const thinY = rowY + 8;
             const thickY = thinY + BAR_H + GAP;
@@ -192,38 +394,35 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
         </g>
       </svg>
 
-      {/* Legend: HTML (not SVG) so it wraps naturally on narrow layouts.
-          Aligned to the plot area's left edge to sit under the bars. */}
-      {showLegend && legendItems.length > 0 && (
+      {visibleRows.length === 0 && (
         <div
           style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px 18px',
-            paddingLeft: MARGIN.left,
-            marginTop: 2,
+            position: 'absolute',
+            top: MARGIN.top,
+            left: MARGIN.left,
+            color: '#999',
             fontSize: 12,
-            color: '#333',
-            fontFamily: 'inherit',
           }}
         >
-          {legendItems.map((it) => (
-            <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  background: it.color,
-                  borderRadius: it.shape === 'circle' ? '50%' : 2,
-                  display: 'inline-block',
-                  flex: '0 0 auto',
-                }}
-              />
-              <span>{it.label}</span>
-            </div>
-          ))}
+          All categories are filtered out.
         </div>
       )}
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: vertical ? 'row' : 'column',
+        gap: 10,
+        alignItems: 'flex-start',
+        width: '100%',
+      }}
+    >
+      {showLegendNow && legendFirst && legendEl}
+      {chartArea}
+      {showLegendNow && !legendFirst && legendEl}
     </div>
   );
 }

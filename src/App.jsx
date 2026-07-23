@@ -88,6 +88,14 @@ const CONFIG = [
     defaultValue: true,
   },
   {
+    name: 'legendPosition',
+    type: 'dropdown',
+    label: 'Legend position',
+    source: 'format',
+    values: ['Top', 'Bottom', 'Left', 'Right'],
+    defaultValue: 'Bottom',
+  },
+  {
     name: 'sortBy',
     type: 'dropdown',
     label: 'Sort by',
@@ -118,6 +126,13 @@ const CONFIG = [
     source: 'format',
     defaultValue: false,
   },
+  {
+    name: 'enableFilter',
+    type: 'toggle',
+    label: 'Enable category filter',
+    source: 'format',
+    defaultValue: true,
+  },
   { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color', source: 'format' },
   { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color', source: 'format' },
   { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color', source: 'format' },
@@ -146,9 +161,11 @@ export default function App() {
   const pointCol = useConfig('point');
   const title = useConfig('title');
   const showLegend = useConfig('showLegend');
+  const legendPosition = useConfig('legendPosition');
   const sortBy = useConfig('sortBy');
   const sortDir = useConfig('sortDir');
   const showDataLabels = useConfig('showDataLabels');
+  const enableFilter = useConfig('enableFilter');
 
   const bar1aColor = useConfig('bar1aColor');
   const bar1bColor = useConfig('bar1bColor');
@@ -259,8 +276,10 @@ export default function App() {
       colors={colors}
       labels={labels}
       showDataLabels={showDataLabels}
-      showLegend={showLegend}
+      showLegend={showLegend !== false}
+      legendPosition={legendPosition || 'Bottom'}
       legendItems={legendItems}
+      enableFilter={enableFilter !== false}
     />
   );
 }
