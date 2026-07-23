@@ -5,6 +5,9 @@ const ROW_HEIGHT = 56;
 const BAR_H = 20;   // both bars share one thickness
 const GAP = 4;
 const TILE_PADDING = 12;
+// Vertical center of the two-bar block within a row, so the point marker sits
+// on its bars (not floating above them).
+const POINT_CY = 8 + (2 * BAR_H + GAP) / 2;
 
 function useContainerWidth() {
   const ref = useRef(null);
@@ -416,9 +419,9 @@ export default function BulletChart({
 
                 {r.point !== null && r.point !== undefined && (
                   <>
-                    <circle cx={pointX(r.point)} cy={rowY + 2} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
+                    <circle cx={pointX(r.point)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
                     {showDataLabels && (
-                      <text x={pointX(r.point) + 9} y={rowY + 5} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(r.point)}</text>
+                      <text x={pointX(r.point) + 9} y={rowY + POINT_CY + 3} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(r.point)}</text>
                     )}
                   </>
                 )}
@@ -468,15 +471,18 @@ export default function BulletChart({
         flexDirection: 'column',
         width: '100%',
         boxSizing: 'border-box',
-        background: backgroundColor || 'transparent',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        background: backgroundColor || '#FCFBFC',
         ...(showBorder ? { border: `2px solid ${borderColor}`, borderRadius: 6, padding: TILE_PADDING } : {}),
       }}
     >
       {hasHeader && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8, minHeight: 22 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#333', lineHeight: 1.3 }}>{title || ''}</div>
+        <div style={{ position: 'relative', minHeight: 24, marginBottom: 10 }}>
+          <div style={{ textAlign: 'center', fontSize: 18, fontWeight: 500, color: '#2d2d2d', lineHeight: 1.3, padding: '0 90px' }}>{title || ''}</div>
           {enableFilter && filterFields.length > 0 && (
-            <DataFilter fields={filterFields} categories={categories} stats={stats} hidden={hidden} setHidden={setHidden} ranges={ranges} setRanges={setRanges} />
+            <div style={{ position: 'absolute', top: 0, right: 0 }}>
+              <DataFilter fields={filterFields} categories={categories} stats={stats} hidden={hidden} setHidden={setHidden} ranges={ranges} setRanges={setRanges} />
+            </div>
           )}
         </div>
       )}
