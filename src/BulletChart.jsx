@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-const MARGIN = { top: 34, right: 24, bottom: 34, left: 170 };
+const MARGIN = { top: 20, right: 24, bottom: 34, left: 170 };
 const ROW_HEIGHT = 56;
 const BAR_H = 20;   // both bars share one thickness now
 const GAP = 4;
@@ -195,7 +195,7 @@ function DataFilter({ fields, categories, stats, hidden, setHidden, ranges, setR
   };
 
   return (
-    <div ref={rootRef} style={{ position: 'absolute', top: 2, right: 2, zIndex: 5, fontSize: 12 }}>
+    <div ref={rootRef} style={{ position: 'relative', zIndex: 5, fontSize: 12, flex: '0 0 auto' }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -378,10 +378,13 @@ function DataFilter({ fields, categories, stats, hidden, setHidden, ranges, setR
   );
 }
 
-/** Series legend. Lays out horizontally (wrapping) for Top/Bottom, and as a
- * vertical stack for Left/Right. */
-function Legend({ items, position }) {
+/** Series legend. Horizontal (wrapping) for Top/Bottom, vertical stack for
+ * Left/Right. For horizontal, `align` sets justifyContent across the full
+ * width; for vertical, the parent row's alignItems handles vertical placement,
+ * so the legend itself just lays out its items. */
+function Legend({ items, position, align }) {
   const vertical = position === 'Left' || position === 'Right';
+  const justify = align === 'Center' ? 'center' : align === 'End' ? 'flex-end' : 'flex-start';
   return (
     <div
       style={{
@@ -392,7 +395,7 @@ function Legend({ items, position }) {
         alignContent: 'flex-start',
         fontSize: 12,
         color: '#333',
-        ...(vertical ? { paddingTop: MARGIN.top } : {}),
+        ...(vertical ? {} : { justifyContent: justify, width: '100%' }),
       }}
     >
       {items.map((it) => (
@@ -423,6 +426,7 @@ export default function BulletChart({
   showLegend,
   legendItems = [],
   legendPosition = 'Bottom',
+  legendAlign = 'Center',
   enableFilter = true,
   filterFields = [],
 }) {
@@ -492,29 +496,14 @@ export default function BulletChart({
   const showLegendNow = showLegend && legendItems.length > 0;
   const vertical = legendPosition === 'Left' || legendPosition === 'Right';
   const legendFirst = legendPosition === 'Top' || legendPosition === 'Left';
-  const legendEl = showLegendNow ? <Legend items={legendItems} position={legendPosition} /> : null;
+  const alignJustify = legendAlign === 'Center' ? 'center' : legendAlign === 'End' ? 'flex-end' : 'flex-start';
+  const legendEl = showLegendNow ? (
+    <Legend items={legendItems} position={legendPosition} align={legendAlign} />
+  ) : null;
 
   const chartArea = (
     <div ref={containerRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
-      {enableFilter && filterFields.length > 0 && (
-        <DataFilter
-          fields={filterFields}
-          categories={categories}
-          stats={stats}
-          hidden={hidden}
-          setHidden={setHidden}
-          ranges={ranges}
-          setRanges={setRanges}
-        />
-      )}
-
       <svg width={containerWidth} height={totalHeight}>
-        {title ? (
-          <text x={0} y={20} fontSize="15" fontWeight="600" fill="#333">
-            {title}
-          </text>
-        ) : null}
-
         <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
           {ticks.map((t) => (
             <g key={t}>
@@ -609,19 +598,53 @@ export default function BulletChart({
     </div>
   );
 
+  const hasHeader = Boolean(title) || (enableFilter && filterFields.length > 0);
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: vertical ? 'row' : 'column',
-        gap: 10,
-        alignItems: 'flex-start',
-        width: '100%',
-      }}
-    >
-      {showLegendNow && legendFirst && legendEl}
-      {chartArea}
-      {showLegendNow && !legendFirst && legendEl}
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+      {/* Header spans the full element width: title on the left owns the very
+          top, filter control sits top-right. The legend never renders here. */}
+      {hasHeader && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 8,
+            minHeight: 22,
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#333', lineHeight: 1.3 }}>{title || ''}</div>
+          {enableFilter && filterFields.length > 0 && (
+            <DataFilter
+              fields={filterFields}
+              categories={categories}
+              stats={stats}
+              hidden={hidden}
+              setHidden={setHidden}
+              ranges={ranges}
+              setRanges={setRanges}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Legend + plot. For Top the legend sits between title and plot; for
+          Left/Right the parent's alignItems applies the chosen alignment. */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: vertical ? 'row' : 'column',
+          gap: 10,
+          width: '100%',
+          ...(vertical ? { alignItems: alignJustify } : {}),
+        }}
+      >
+        {showLegendNow && legendFirst && legendEl}
+        {chartArea}
+        {showLegendNow && !legendFirst && legendEl}
+      </div>
     </div>
   );
 }

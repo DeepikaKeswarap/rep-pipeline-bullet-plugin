@@ -96,6 +96,14 @@ const CONFIG = [
     defaultValue: 'Bottom',
   },
   {
+    name: 'legendAlign',
+    type: 'dropdown',
+    label: 'Legend alignment',
+    source: 'format',
+    values: ['Start', 'Center', 'End'],
+    defaultValue: 'Center',
+  },
+  {
     name: 'sortBy',
     type: 'dropdown',
     label: 'Sort by',
@@ -162,6 +170,7 @@ export default function App() {
   const title = useConfig('title');
   const showLegend = useConfig('showLegend');
   const legendPosition = useConfig('legendPosition');
+  const legendAlign = useConfig('legendAlign');
   const sortBy = useConfig('sortBy');
   const sortDir = useConfig('sortDir');
   const showDataLabels = useConfig('showDataLabels');
@@ -292,6 +301,7 @@ export default function App() {
       showDataLabels={showDataLabels}
       showLegend={showLegend !== false}
       legendPosition={legendPosition || 'Bottom'}
+      legendAlign={legendAlign || 'Center'}
       legendItems={legendItems}
       enableFilter={enableFilter !== false}
       filterFields={filterFields}
