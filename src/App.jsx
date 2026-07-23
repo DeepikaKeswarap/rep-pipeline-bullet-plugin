@@ -71,6 +71,34 @@ const CONFIG = [
     label: 'Chart title',
     defaultValue: 'Rep Pipeline vs Target',
   },
+  {
+    name: 'sortBy',
+    type: 'dropdown',
+    label: 'Sort by',
+    values: [
+      'None',
+      'Category',
+      'Bar 1 – Segment A',
+      'Bar 1 – Segment B',
+      'Bar 2 – Segment A',
+      'Bar 2 – Segment B',
+      'Point marker',
+    ],
+    defaultValue: 'None',
+  },
+  {
+    name: 'sortDir',
+    type: 'dropdown',
+    label: 'Sort direction',
+    values: ['Descending', 'Ascending'],
+    defaultValue: 'Descending',
+  },
+  {
+    name: 'showDataLabels',
+    type: 'toggle',
+    label: 'Show data labels',
+    defaultValue: false,
+  },
   { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color' },
   { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color' },
   { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color' },
@@ -98,6 +126,9 @@ export default function App() {
   const bar2bCol = useConfig('bar2b');
   const pointCol = useConfig('point');
   const title = useConfig('title');
+  const sortBy = useConfig('sortBy');
+  const sortDir = useConfig('sortDir');
+  const showDataLabels = useConfig('showDataLabels');
 
   const bar1aColor = useConfig('bar1aColor');
   const bar1bColor = useConfig('bar1bColor');
@@ -135,6 +166,33 @@ export default function App() {
     }));
   }, [data, categoryCol, bar1aCol, bar1bCol, bar2aCol, bar2bCol, pointCol]);
 
+  // Maps the human-readable "Sort by" dropdown choices onto row field keys.
+  const SORT_FIELD = {
+    Category: 'category',
+    'Bar 1 – Segment A': 'bar1a',
+    'Bar 1 – Segment B': 'bar1b',
+    'Bar 2 – Segment A': 'bar2a',
+    'Bar 2 – Segment B': 'bar2b',
+    'Point marker': 'point',
+  };
+
+  const sortedRows = useMemo(() => {
+    const field = SORT_FIELD[sortBy];
+    if (!field) return rows;
+    const dir = sortDir === 'Ascending' ? 1 : -1;
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      if (field === 'category') {
+        return dir * String(a.category ?? '').localeCompare(String(b.category ?? ''));
+      }
+      // Nulls / non-numbers sort to the bottom regardless of direction.
+      const av = a[field] === null || a[field] === undefined || Number.isNaN(a[field]) ? -Infinity : a[field];
+      const bv = b[field] === null || b[field] === undefined || Number.isNaN(b[field]) ? -Infinity : b[field];
+      return dir * (av - bv);
+    });
+    return copy;
+  }, [rows, sortBy, sortDir]);
+
   const labels = useMemo(
     () => ({
       bar1a: columns?.[bar1aCol]?.name || 'Bar 1 – Segment A',
@@ -164,5 +222,13 @@ export default function App() {
     );
   }
 
-  return <BulletChart rows={rows} title={title} colors={colors} labels={labels} />;
+  return (
+    <BulletChart
+      rows={sortedRows}
+      title={title}
+      colors={colors}
+      labels={labels}
+      showDataLabels={showDataLabels}
+    />
+  );
 }

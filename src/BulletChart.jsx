@@ -32,6 +32,22 @@ function formatNumber(n) {
   return new Intl.NumberFormat('en-US').format(Math.round(n));
 }
 
+/** Picks black or white label text for readability over a given fill color. */
+function readableText(hex) {
+  if (!hex || typeof hex !== 'string') return '#333';
+  const c = hex.replace('#', '');
+  const full = c.length === 3 ? c.split('').map((ch) => ch + ch).join('') : c;
+  if (full.length < 6) return '#333';
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? '#333' : '#fff';
+}
+
+// Only draw a value inside a segment when it's wide enough to fit legibly.
+const MIN_LABEL_WIDTH = 26;
+
 /** Picks a "nice" round step for axis ticks (1/2/5/10 x a power of ten). */
 function niceTicks(max, targetCount = 6) {
   if (!Number.isFinite(max) || max <= 0) return [0];
@@ -49,7 +65,7 @@ function niceTicks(max, targetCount = 6) {
   return ticks;
 }
 
-export default function BulletChart({ rows, title, colors, labels }) {
+export default function BulletChart({ rows, title, colors, labels, showDataLabels }) {
   const [containerRef, containerWidth] = useContainerWidth();
 
   const maxValue = useMemo(() => {
@@ -125,11 +141,51 @@ export default function BulletChart({ rows, title, colors, labels }) {
                   <title>{`${labels.bar2b}: ${formatNumber(r.bar2b)}`}</title>
                 </rect>
 
+                {/* Data labels: value centered in each segment wide enough to hold it */}
+                {showDataLabels && (
+                  <g fontSize="10" style={{ pointerEvents: 'none' }}>
+                    {bar1aW >= MIN_LABEL_WIDTH && (
+                      <text x={bar1aW / 2} y={thinY + THIN_H / 2 + 3.5} fill={readableText(colors.bar1a)} textAnchor="middle">
+                        {formatNumber(r.bar1a)}
+                      </text>
+                    )}
+                    {bar1bW >= MIN_LABEL_WIDTH && (
+                      <text x={bar1aW + bar1bW / 2} y={thinY + THIN_H / 2 + 3.5} fill={readableText(colors.bar1b)} textAnchor="middle">
+                        {formatNumber(r.bar1b)}
+                      </text>
+                    )}
+                    {bar2aW >= MIN_LABEL_WIDTH && (
+                      <text x={bar2aW / 2} y={thickY + THICK_H / 2 + 4} fill={readableText(colors.bar2a)} textAnchor="middle">
+                        {formatNumber(r.bar2a)}
+                      </text>
+                    )}
+                    {bar2bW >= MIN_LABEL_WIDTH && (
+                      <text x={bar2aW + bar2bW / 2} y={thickY + THICK_H / 2 + 4} fill={readableText(colors.bar2b)} textAnchor="middle">
+                        {formatNumber(r.bar2b)}
+                      </text>
+                    )}
+                  </g>
+                )}
+
                 {/* Point marker, plotted independently on the same x-scale */}
                 {r.point !== null && (
-                  <circle cx={x(r.point)} cy={rowY + 2} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5">
-                    <title>{`${labels.point}: ${formatNumber(r.point)}`}</title>
-                  </circle>
+                  <>
+                    <circle cx={x(r.point)} cy={rowY + 2} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5">
+                      <title>{`${labels.point}: ${formatNumber(r.point)}`}</title>
+                    </circle>
+                    {showDataLabels && (
+                      <text
+                        x={x(r.point)}
+                        y={rowY - 6}
+                        fontSize="10"
+                        fill={colors.point}
+                        textAnchor="middle"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {formatNumber(r.point)}
+                      </text>
+                    )}
+                  </>
                 )}
               </g>
             );
