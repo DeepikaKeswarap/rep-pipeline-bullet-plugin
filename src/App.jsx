@@ -11,12 +11,17 @@ import BulletChart from './BulletChart';
 // Editor panel definition. This is what shows up in the right-hand panel
 // in Sigma when a user selects this plugin element and clicks around.
 //
-// - "source" lets the user pick which data element (table) in the workbook
-//   to read from.
-// - "category", "bar1a"/"bar1b", "bar2a"/"bar2b", and "point" are column
-//   pickers scoped to that source element.
-// - The color pickers are optional and fall back to sensible defaults.
+// The panel is split into two areas:
+//   1. Data      – top-level fields: which element to read, and which columns
+//                  map onto the category, the two bars, and the point marker.
+//   2. Format    – a collapsible "group" section holding presentation-only
+//                  options (title, legend, sort, data labels, colors). Fields
+//                  join a group by setting `source` to the group's name.
+//
+// Note: Sigma plugins render groups as collapsible sections in the single
+// editor panel — not as separate top-level tabs like native Sigma viz.
 const CONFIG = [
+  // --- Data ---
   { name: 'source', type: 'element', label: 'Data source' },
   {
     name: 'category',
@@ -65,16 +70,28 @@ const CONFIG = [
     allowMultiple: false,
     allowedTypes: ['number', 'integer'],
   },
+
+  // --- Format ---
+  { name: 'format', type: 'group', label: 'Format' },
   {
     name: 'title',
     type: 'text',
     label: 'Chart title',
+    source: 'format',
     defaultValue: 'Rep Pipeline vs Target',
+  },
+  {
+    name: 'showLegend',
+    type: 'toggle',
+    label: 'Show legend',
+    source: 'format',
+    defaultValue: true,
   },
   {
     name: 'sortBy',
     type: 'dropdown',
     label: 'Sort by',
+    source: 'format',
     values: [
       'None',
       'Category',
@@ -90,6 +107,7 @@ const CONFIG = [
     name: 'sortDir',
     type: 'dropdown',
     label: 'Sort direction',
+    source: 'format',
     values: ['Descending', 'Ascending'],
     defaultValue: 'Descending',
   },
@@ -97,13 +115,14 @@ const CONFIG = [
     name: 'showDataLabels',
     type: 'toggle',
     label: 'Show data labels',
+    source: 'format',
     defaultValue: false,
   },
-  { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color' },
-  { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color' },
-  { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color' },
-  { name: 'bar2bColor', type: 'color', label: 'Bar 2 – Segment B color' },
-  { name: 'pointColor', type: 'color', label: 'Point marker color' },
+  { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color', source: 'format' },
+  { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color', source: 'format' },
+  { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color', source: 'format' },
+  { name: 'bar2bColor', type: 'color', label: 'Bar 2 – Segment B color', source: 'format' },
+  { name: 'pointColor', type: 'color', label: 'Point marker color', source: 'format' },
 ];
 
 const DEFAULT_COLORS = {
@@ -126,6 +145,7 @@ export default function App() {
   const bar2bCol = useConfig('bar2b');
   const pointCol = useConfig('point');
   const title = useConfig('title');
+  const showLegend = useConfig('showLegend');
   const sortBy = useConfig('sortBy');
   const sortDir = useConfig('sortDir');
   const showDataLabels = useConfig('showDataLabels');
@@ -213,6 +233,16 @@ export default function App() {
     point: pointColor || DEFAULT_COLORS.point,
   };
 
+  // One legend entry per series that actually has a column mapped, so the
+  // legend never advertises a segment the user didn't populate. Bars show a
+  // square swatch; the point marker shows a circle.
+  const legendItems = [];
+  if (bar1aCol) legendItems.push({ key: 'bar1a', label: labels.bar1a, color: colors.bar1a, shape: 'rect' });
+  if (bar1bCol) legendItems.push({ key: 'bar1b', label: labels.bar1b, color: colors.bar1b, shape: 'rect' });
+  if (bar2aCol) legendItems.push({ key: 'bar2a', label: labels.bar2a, color: colors.bar2a, shape: 'rect' });
+  if (bar2bCol) legendItems.push({ key: 'bar2b', label: labels.bar2b, color: colors.bar2b, shape: 'rect' });
+  if (pointCol) legendItems.push({ key: 'point', label: labels.point, color: colors.point, shape: 'circle' });
+
   if (!source || !categoryCol) {
     return (
       <div className="empty-state">
@@ -229,6 +259,8 @@ export default function App() {
       colors={colors}
       labels={labels}
       showDataLabels={showDataLabels}
+      showLegend={showLegend}
+      legendItems={legendItems}
     />
   );
 }

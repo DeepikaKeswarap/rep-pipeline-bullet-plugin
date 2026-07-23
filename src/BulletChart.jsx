@@ -64,7 +64,7 @@ function niceTicks(max, targetCount = 6) {
   return ticks;
 }
 
-export default function BulletChart({ rows, title, colors, labels, showDataLabels }) {
+export default function BulletChart({ rows, title, colors, labels, showDataLabels, showLegend, legendItems = [] }) {
   const [containerRef, containerWidth] = useContainerWidth();
 
   const maxValue = useMemo(() => {
@@ -191,6 +191,39 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
           })}
         </g>
       </svg>
+
+      {/* Legend: HTML (not SVG) so it wraps naturally on narrow layouts.
+          Aligned to the plot area's left edge to sit under the bars. */}
+      {showLegend && legendItems.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px 18px',
+            paddingLeft: MARGIN.left,
+            marginTop: 2,
+            fontSize: 12,
+            color: '#333',
+            fontFamily: 'inherit',
+          }}
+        >
+          {legendItems.map((it) => (
+            <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  background: it.color,
+                  borderRadius: it.shape === 'circle' ? '50%' : 2,
+                  display: 'inline-block',
+                  flex: '0 0 auto',
+                }}
+              />
+              <span>{it.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
