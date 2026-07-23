@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const MARGIN = { top: 34, right: 24, bottom: 34, left: 170 };
 const ROW_HEIGHT = 56;
-const THIN_H = 13;
-const THICK_H = 26;
+const BAR_H = 20;   // both bars share one thickness now
 const GAP = 4;
 
 /** Tracks the rendered width of a container element so the chart can fill
@@ -107,7 +106,7 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
           {rows.map((r, i) => {
             const rowY = i * ROW_HEIGHT;
             const thinY = rowY + 8;
-            const thickY = thinY + THIN_H + GAP;
+            const thickY = thinY + BAR_H + GAP;
             const bar1aW = x(r.bar1a);
             const bar1bW = Math.max(x(r.bar1a + r.bar1b) - bar1aW, 0);
             const bar2aW = x(r.bar2a);
@@ -125,19 +124,19 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
                   {r.category}
                 </text>
 
-                {/* Bar 1: thin stacked bar (two segments) */}
-                <rect x={0} y={thinY} width={bar1aW} height={THIN_H} fill={colors.bar1a} rx="1.5">
+                {/* Bar 1: stacked bar (two segments) */}
+                <rect x={0} y={thinY} width={bar1aW} height={BAR_H} fill={colors.bar1a} rx="1.5">
                   <title>{`${labels.bar1a}: ${formatNumber(r.bar1a)}`}</title>
                 </rect>
-                <rect x={bar1aW} y={thinY} width={bar1bW} height={THIN_H} fill={colors.bar1b} rx="1.5">
+                <rect x={bar1aW} y={thinY} width={bar1bW} height={BAR_H} fill={colors.bar1b} rx="1.5">
                   <title>{`${labels.bar1b}: ${formatNumber(r.bar1b)}`}</title>
                 </rect>
 
-                {/* Bar 2: thick stacked bar (two segments) */}
-                <rect x={0} y={thickY} width={bar2aW} height={THICK_H} fill={colors.bar2a} rx="2">
+                {/* Bar 2: stacked bar (two segments) */}
+                <rect x={0} y={thickY} width={bar2aW} height={BAR_H} fill={colors.bar2a} rx="2">
                   <title>{`${labels.bar2a}: ${formatNumber(r.bar2a)}`}</title>
                 </rect>
-                <rect x={bar2aW} y={thickY} width={bar2bW} height={THICK_H} fill={colors.bar2b} rx="2">
+                <rect x={bar2aW} y={thickY} width={bar2bW} height={BAR_H} fill={colors.bar2b} rx="2">
                   <title>{`${labels.bar2b}: ${formatNumber(r.bar2b)}`}</title>
                 </rect>
 
@@ -145,22 +144,22 @@ export default function BulletChart({ rows, title, colors, labels, showDataLabel
                 {showDataLabels && (
                   <g fontSize="10" style={{ pointerEvents: 'none' }}>
                     {bar1aW >= MIN_LABEL_WIDTH && (
-                      <text x={bar1aW / 2} y={thinY + THIN_H / 2 + 3.5} fill={readableText(colors.bar1a)} textAnchor="middle">
+                      <text x={bar1aW / 2} y={thinY + BAR_H / 2 + 3.5} fill={readableText(colors.bar1a)} textAnchor="middle">
                         {formatNumber(r.bar1a)}
                       </text>
                     )}
                     {bar1bW >= MIN_LABEL_WIDTH && (
-                      <text x={bar1aW + bar1bW / 2} y={thinY + THIN_H / 2 + 3.5} fill={readableText(colors.bar1b)} textAnchor="middle">
+                      <text x={bar1aW + bar1bW / 2} y={thinY + BAR_H / 2 + 3.5} fill={readableText(colors.bar1b)} textAnchor="middle">
                         {formatNumber(r.bar1b)}
                       </text>
                     )}
                     {bar2aW >= MIN_LABEL_WIDTH && (
-                      <text x={bar2aW / 2} y={thickY + THICK_H / 2 + 4} fill={readableText(colors.bar2a)} textAnchor="middle">
+                      <text x={bar2aW / 2} y={thickY + BAR_H / 2 + 3.5} fill={readableText(colors.bar2a)} textAnchor="middle">
                         {formatNumber(r.bar2a)}
                       </text>
                     )}
                     {bar2bW >= MIN_LABEL_WIDTH && (
-                      <text x={bar2aW + bar2bW / 2} y={thickY + THICK_H / 2 + 4} fill={readableText(colors.bar2b)} textAnchor="middle">
+                      <text x={bar2aW + bar2bW / 2} y={thickY + BAR_H / 2 + 3.5} fill={readableText(colors.bar2b)} textAnchor="middle">
                         {formatNumber(r.bar2b)}
                       </text>
                     )}
