@@ -1,4 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { format as d3Format } from 'd3-format';
+
+// d3 "$.3s": currency with SI suffix at 3 significant figures — matches Sigma's
+// table display (e.g. $40.6k, $1.83M, $325k). The plugin SDK doesn't expose a
+// column's format string, so we replicate the common d3 spec here.
+const currency3s = d3Format('$.3s');
 
 const MARGIN = { top: 20, right: 24, bottom: 34, left: 170 };
 const ROW_HEIGHT = 56;
@@ -45,7 +51,7 @@ function makeFormatter(kind) {
     case 'Percent (0%)':
       return (v) => (v === null || v === undefined || Number.isNaN(v) ? '' : `${trim1(v)}%`);
     case 'Currency ($)':
-      return (v) => (v === null || v === undefined || Number.isNaN(v) ? '' : `$${fmtCompact(v)}`);
+      return (v) => (v === null || v === undefined || Number.isNaN(v) ? '' : currency3s(v));
     case 'Compact (1.2K)':
     default:
       return (v) => (v === null || v === undefined || Number.isNaN(v) ? '' : fmtCompact(v));
