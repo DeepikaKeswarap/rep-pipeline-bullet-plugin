@@ -93,6 +93,58 @@ function niceTicks(max, targetCount = 6) {
   return ticks;
 }
 
+// Ticks at a fixed step starting from 0 (e.g. step 4 -> 0,4,8,12). Falls back
+// to niceTicks when step is 'Auto' or invalid.
+function ticksFrom(max, step) {
+  const s = Number(step);
+  if (!s || !Number.isFinite(s) || s <= 0) return niceTicks(max);
+  const top = Math.max(Math.ceil((max || 0) / s) * s, s);
+  const out = [];
+  for (let t = 0; t <= top + 1e-9; t += s) out.push(t);
+  return out;
+}
+
+// Value labels for one stacked bar. Segments whose label fits are centered
+// inside. A single overflowing segment gets its label just past its own end.
+// When TWO (or more) segments overflow, their labels would collide on the same
+// baseline, so they're laid out in sequence to the right of the whole bar, each
+// prefixed with a small color swatch so you can still tell them apart.
+function BarLabels({ segs, y, totalRight }) {
+  const estW = (t) => t.length * 5.6 + 2; // rough width at 10px
+  const inside = [];
+  const overflow = [];
+  segs.forEach((s, i) => {
+    if (!s.value || s.value <= 0 || !s.text) return;
+    if (s.w >= estW(s.text) + 6) inside.push({ ...s, i });
+    else overflow.push({ ...s, i });
+  });
+
+  const nodes = inside.map((s) => (
+    <text key={`in${s.i}`} x={s.x0 + s.w / 2} y={y} fill={readableText(s.fill)} textAnchor="middle">{s.text}</text>
+  ));
+
+  if (overflow.length === 1) {
+    const s = overflow[0];
+    if (s.w >= 4) {
+      nodes.push(
+        <text key={`out${s.i}`} x={s.x0 + s.w + 4} y={y} fill="#2d2d2d" textAnchor="start" stroke="#ffffff" strokeWidth="2.5" paintOrder="stroke">{s.text}</text>,
+      );
+    }
+  } else if (overflow.length >= 2) {
+    let cursor = totalRight + 6;
+    overflow.forEach((s) => {
+      nodes.push(<rect key={`sw${s.i}`} x={cursor} y={y - 8} width="8" height="8" rx="1" fill={s.fill} stroke="#ffffff" strokeWidth="0.5" />);
+      cursor += 11;
+      nodes.push(
+        <text key={`ot${s.i}`} x={cursor} y={y} fill="#2d2d2d" textAnchor="start" stroke="#ffffff" strokeWidth="2.5" paintOrder="stroke">{s.text}</text>,
+      );
+      cursor += estW(s.text) + 12;
+    });
+  }
+
+  return <g>{nodes}</g>;
+}
+
 const linkBtnStyle = { background: 'none', border: 'none', color: '#2b6cb0', cursor: 'pointer', fontSize: 12, padding: 0 };
 const numInputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 };
 const NUMERIC_OPS = [
@@ -288,6 +340,8 @@ export default function BulletChart({
   valueFormat = 'Compact (1.2K)',
   pointFormat = 'Percent (0%)',
   pointSecondaryAxis = true,
+  snapPointWhole = true,
+  targetAxisStep = 'Auto',
   showBorder = true,
   borderColor = '#D0D0D0',
   backgroundColor,
@@ -341,7 +395,10 @@ export default function BulletChart({
 
   // Secondary (point) scale.
   const pointMax = useMemo(() => (pointVals.length ? Math.max(...pointVals) : 0), [pointVals]);
-  const pointTicks = useMemo(() => (useSecondary ? niceTicks(pointMax) : []), [useSecondary, pointMax]);
+  const pointTicks = useMemo(
+    () => (useSecondary ? ticksFrom(pointMax, targetAxisStep) : []),
+    [useSecondary, pointMax, targetAxisStep],
+  );
   const pointScaleMax = pointTicks.length ? pointTicks[pointTicks.length - 1] : pointMax || 1;
 
   const topPad = useSecondary ? 44 : MARGIN.top;
@@ -416,21 +473,36 @@ export default function BulletChart({
 
                 {showDataLabels && (
                   <g fontSize="10" style={{ pointerEvents: 'none' }}>
-                    {bar1aW >= MIN_LABEL_WIDTH && (<text x={bar1aW / 2} y={thinY + BAR_H / 2 + 3.5} fill={readableText(colors.bar1a)} textAnchor="middle">{barFmt(r.bar1a)}</text>)}
-                    {bar1bW >= MIN_LABEL_WIDTH && (<text x={bar1aW + bar1bW / 2} y={thinY + BAR_H / 2 + 3.5} fill={readableText(colors.bar1b)} textAnchor="middle">{barFmt(r.bar1b)}</text>)}
-                    {bar2aW >= MIN_LABEL_WIDTH && (<text x={bar2aW / 2} y={thickY + BAR_H / 2 + 3.5} fill={readableText(colors.bar2a)} textAnchor="middle">{barFmt(r.bar2a)}</text>)}
-                    {bar2bW >= MIN_LABEL_WIDTH && (<text x={bar2aW + bar2bW / 2} y={thickY + BAR_H / 2 + 3.5} fill={readableText(colors.bar2b)} textAnchor="middle">{barFmt(r.bar2b)}</text>)}
+                    <BarLabels
+                      segs={[
+                        { x0: 0, w: bar1aW, text: barFmt(r.bar1a), fill: colors.bar1a, value: r.bar1a },
+                        { x0: bar1aW, w: bar1bW, text: barFmt(r.bar1b), fill: colors.bar1b, value: r.bar1b },
+                      ]}
+                      y={thinY + BAR_H / 2 + 3.5}
+                      totalRight={bar1aW + bar1bW}
+                    />
+                    <BarLabels
+                      segs={[
+                        { x0: 0, w: bar2aW, text: barFmt(r.bar2a), fill: colors.bar2a, value: r.bar2a },
+                        { x0: bar2aW, w: bar2bW, text: barFmt(r.bar2b), fill: colors.bar2b, value: r.bar2b },
+                      ]}
+                      y={thickY + BAR_H / 2 + 3.5}
+                      totalRight={bar2aW + bar2bW}
+                    />
                   </g>
                 )}
 
-                {r.point !== null && r.point !== undefined && (
-                  <>
-                    <circle cx={pointX(r.point)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
-                    {showDataLabels && (
-                      <text x={pointX(r.point) + 9} y={rowY + POINT_CY + 3} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(r.point)}</text>
-                    )}
-                  </>
-                )}
+                {r.point !== null && r.point !== undefined && (() => {
+                  const pv = snapPointWhole ? Math.round(r.point) : r.point;
+                  return (
+                    <>
+                      <circle cx={pointX(pv)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
+                      {showDataLabels && (
+                        <text x={pointX(pv) + 9} y={rowY + POINT_CY + 3} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(pv)}</text>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Transparent hover target spanning the row for the tooltip */}
                 <rect
@@ -452,13 +524,17 @@ export default function BulletChart({
       {tip && (
         <div style={{ position: 'absolute', left: tipLeft, top: tip.top + 12, width: tipW, pointerEvents: 'none', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,0.15)', padding: '8px 10px', fontSize: 12, color: '#333', zIndex: 10 }}>
           <div style={{ fontWeight: 600, marginBottom: 5 }}>{tip.row.category}</div>
-          {legendItems.map((it) => (
-            <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ width: 10, height: 10, background: it.color, borderRadius: it.shape === 'circle' ? '50%' : 2, display: 'inline-block', flex: '0 0 auto' }} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
-              <span style={{ fontWeight: 600 }}>{fmtFor(it.key)(tip.row[it.key])}</span>
-            </div>
-          ))}
+          {legendItems.map((it) => {
+            const rv = tip.row[it.key];
+            const dv = it.key === 'point' && snapPointWhole && rv !== null && rv !== undefined ? Math.round(rv) : rv;
+            return (
+              <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <span style={{ width: 10, height: 10, background: it.color, borderRadius: it.shape === 'circle' ? '50%' : 2, display: 'inline-block', flex: '0 0 auto' }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
+                <span style={{ fontWeight: 600 }}>{fmtFor(it.key)(dv)}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
