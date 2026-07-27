@@ -172,14 +172,6 @@ const CONFIG = [
     source: 'format',
     defaultValue: true,
   },
-  {
-    name: 'targetAxisStep',
-    type: 'dropdown',
-    label: 'Target axis step',
-    source: 'format',
-    values: ['Auto', '1', '2', '4', '5', '10'],
-    defaultValue: 'Auto',
-  },
   { name: 'bar1aColor', type: 'color', label: 'Bar 1 – Segment A color', source: 'format' },
   { name: 'bar1bColor', type: 'color', label: 'Bar 1 – Segment B color', source: 'format' },
   { name: 'bar2aColor', type: 'color', label: 'Bar 2 – Segment A color', source: 'format' },
@@ -226,7 +218,6 @@ export default function App() {
   const pointFormat = useConfig('pointFormat');
   const pointSecondaryAxis = useConfig('pointSecondaryAxis');
   const snapPointWhole = useConfig('snapPointWhole');
-  const targetAxisStep = useConfig('targetAxisStep');
   const showBorder = useConfig('showBorder');
   const borderColor = useConfig('borderColor');
   const pluginStyle = usePluginStyle();
@@ -364,7 +355,6 @@ export default function App() {
       pointFormat={pointFormat || 'Percent (0%)'}
       pointSecondaryAxis={pointSecondaryAxis !== false}
       snapPointWhole={snapPointWhole !== false}
-      targetAxisStep={targetAxisStep || 'Auto'}
       showBorder={showBorder !== false}
       borderColor={borderColor || '#D0D0D0'}
       backgroundColor={pluginStyle?.backgroundColor}

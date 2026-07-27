@@ -93,17 +93,6 @@ function niceTicks(max, targetCount = 6) {
   return ticks;
 }
 
-// Ticks at a fixed step starting from 0 (e.g. step 4 -> 0,4,8,12). Falls back
-// to niceTicks when step is 'Auto' or invalid.
-function ticksFrom(max, step) {
-  const s = Number(step);
-  if (!s || !Number.isFinite(s) || s <= 0) return niceTicks(max);
-  const top = Math.max(Math.ceil((max || 0) / s) * s, s);
-  const out = [];
-  for (let t = 0; t <= top + 1e-9; t += s) out.push(t);
-  return out;
-}
-
 // Value labels for one stacked bar. Segments whose label fits are centered
 // inside. A single overflowing segment gets its label just past its own end.
 // When TWO (or more) segments overflow, their labels would collide on the same
@@ -331,7 +320,6 @@ export default function BulletChart({
   colors,
   labels,
   showDataLabels,
-  showPointLabel = true,
   showLegend,
   legendItems = [],
   legendPosition = 'Bottom',
@@ -342,7 +330,6 @@ export default function BulletChart({
   pointFormat = 'Percent (0%)',
   pointSecondaryAxis = true,
   snapPointWhole = true,
-  targetAxisStep = 'Auto',
   showBorder = true,
   borderColor = '#D0D0D0',
   backgroundColor,
@@ -399,10 +386,7 @@ export default function BulletChart({
 
   // Secondary (point) scale.
   const pointMax = useMemo(() => (pointVals.length ? Math.max(...pointVals) : 0), [pointVals]);
-  const pointTicks = useMemo(
-    () => (useSecondary ? ticksFrom(pointMax, targetAxisStep) : []),
-    [useSecondary, pointMax, targetAxisStep],
-  );
+  const pointTicks = useMemo(() => (useSecondary ? niceTicks(pointMax) : []), [useSecondary, pointMax]);
   const pointScaleMax = pointTicks.length ? pointTicks[pointTicks.length - 1] : pointMax || 1;
 
   const topPad = useSecondary ? 44 : MARGIN.top;
@@ -499,12 +483,7 @@ export default function BulletChart({
                 {r.point !== null && r.point !== undefined && (() => {
                   const pv = snapPointWhole ? Math.round(r.point) : r.point;
                   return (
-                    <>
-                      <circle cx={pointX(pv)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
-                      {showPointLabel && (
-                        <text x={pointX(pv) + 9} y={rowY + POINT_CY + 3} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(pv)}</text>
-                      )}
-                    </>
+                    <circle cx={pointX(pv)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
                   );
                 })()}
 
