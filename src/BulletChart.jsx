@@ -331,6 +331,7 @@ export default function BulletChart({
   colors,
   labels,
   showDataLabels,
+  showPointLabel = true,
   showLegend,
   legendItems = [],
   legendPosition = 'Bottom',
@@ -372,7 +373,10 @@ export default function BulletChart({
     return out;
   }, [rows, filterFields]);
 
-  const visibleRows = useMemo(() => rows.filter((r) => rowPasses(r, filterFields, hidden, ranges)), [rows, filterFields, hidden, ranges]);
+  const visibleRows = useMemo(
+    () => (enableFilter ? rows.filter((r) => rowPasses(r, filterFields, hidden, ranges)) : rows),
+    [rows, filterFields, hidden, ranges, enableFilter],
+  );
 
   const pointVals = useMemo(
     () => visibleRows.map((r) => r.point).filter((v) => v !== null && v !== undefined && !Number.isNaN(v)),
@@ -497,7 +501,7 @@ export default function BulletChart({
                   return (
                     <>
                       <circle cx={pointX(pv)} cy={rowY + POINT_CY} r="6" fill={colors.point} stroke="#fff" strokeWidth="1.5" />
-                      {showDataLabels && (
+                      {showPointLabel && (
                         <text x={pointX(pv) + 9} y={rowY + POINT_CY + 3} fontSize="10" fill={colors.point} textAnchor="start" style={{ pointerEvents: 'none' }}>{pointFmt(pv)}</text>
                       )}
                     </>
